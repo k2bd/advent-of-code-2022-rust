@@ -9,3 +9,6 @@ publish = false
 
 [dependencies]
 pico-args = "0.5.0"
+
+[dev-dependencies]
+rstest = "0.16.0"
