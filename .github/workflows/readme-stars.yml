@@ -1,9 +1,8 @@
 name: Update readme ⭐️ progress
 
 on:
-    # !Please set a different minute than 51 if you enable this!
-    # schedule:
-    #     - cron: "51 */6 * * *" # Every 6 hours
+    schedule:
+        - cron: "14 */6 * * *" # Every 6 hours
     workflow_dispatch:
 
 jobs:
@@ -21,7 +20,6 @@ jobs:
               with:
                   userId: ${{ secrets.AOC_USER_ID }}
                   sessionCookie: ${{ secrets.AOC_SESSION }}
-                  year: ${{ secrets.AOC_YEAR }}
             - uses: stefanzweifel/git-auto-commit-action@v4
               if: ${{ env.AOC_ENABLED }}
               env:
