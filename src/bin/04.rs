@@ -76,12 +76,26 @@ mod tests {
 
     #[rstest]
     #[case(CleaningZone {min: 2, max: 8}, CleaningZone { min: 3, max: 7 }, true)]
+    #[case(CleaningZone {min: 6, max: 6}, CleaningZone { min: 4, max: 6 }, true)]
+    #[case(CleaningZone {min: 2, max: 3}, CleaningZone { min: 4, max: 5 }, false)]
     fn test_fully_contained(
         #[case] left_zone: CleaningZone,
         #[case] right_zone: CleaningZone,
         #[case] expected: bool,
     ) {
         assert_eq!(fully_contained(left_zone, right_zone), expected);
+    }
+
+    #[rstest]
+    #[case(CleaningZone {min: 2, max: 8}, CleaningZone { min: 3, max: 7 }, true)]
+    #[case(CleaningZone {min: 5, max: 7}, CleaningZone { min: 7, max: 9 }, true)]
+    #[case(CleaningZone {min: 2, max: 4}, CleaningZone { min: 6, max: 8 }, false)]
+    fn test_any_overlap(
+        #[case] left_zone: CleaningZone,
+        #[case] right_zone: CleaningZone,
+        #[case] expected: bool,
+    ) {
+        assert_eq!(any_overlap(left_zone, right_zone), expected);
     }
 
     #[test]
