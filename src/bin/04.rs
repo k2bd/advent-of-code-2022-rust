@@ -32,8 +32,9 @@ fn fully_contained(left: CleaningZone, right: CleaningZone) -> bool {
         || (right.min <= left.min && right.max >= left.max)
 }
 
+/// Return whether the zones intersect at all
 fn any_overlap(left: CleaningZone, right: CleaningZone) -> bool {
-    (left.min..left.max + 1).any(|num| (right.min..right.max + 1).contains(&num))
+    !((left.max < right.min) || (left.min > right.max))
 }
 
 pub fn part_one(input: &str) -> Option<u32> {
