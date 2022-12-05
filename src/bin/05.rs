@@ -15,8 +15,8 @@ struct CrateInstruction {
 }
 
 impl CrateYard {
-    /// Apply a single crate instruction
-    fn apply_instruction(&mut self, instruction: CrateInstruction) {
+    /// Apply a single crate instruction for the CrateMover 9000
+    fn apply_instruction_crane9000(&mut self, instruction: CrateInstruction) {
         (0..instruction.quantity).for_each(|_| {
             let taken_crate = self
                 .crates
@@ -29,6 +29,20 @@ impl CrateYard {
                 .expect("Cannot move to stack.")
                 .push(taken_crate);
         })
+    }
+
+    /// Apply a single crate instruction for the CrateMover 9001
+    fn apply_instruction_crane9001(&mut self, instruction: CrateInstruction) {
+        let from_stack = self
+            .crates
+            .get_mut(&instruction.from)
+            .expect("Cannot move from stack");
+        let stack_len = from_stack.len();
+        let taken_crates = from_stack.split_off(stack_len - instruction.quantity as usize);
+        self.crates
+            .get_mut(&instruction.to)
+            .expect("Cannot move to stack")
+            .extend(taken_crates);
     }
 
     /// Get the readout of the top crates from each stack
@@ -116,13 +130,25 @@ pub fn part_one(input: &str) -> Option<String> {
 
     move_defs
         .iter()
-        .for_each(|move_def| yard.apply_instruction(CrateInstruction::from(*move_def)));
+        .for_each(|move_def| yard.apply_instruction_crane9000(CrateInstruction::from(*move_def)));
 
     Some(yard.top_readout())
 }
 
 pub fn part_two(input: &str) -> Option<String> {
-    None
+    let lines_vec = input.lines().collect::<Vec<&str>>();
+    let mut parts = lines_vec.split(|element| element.is_empty());
+
+    let yard_def = parts.next().expect("No yard definition");
+    let move_defs = parts.next().expect("No move definitions");
+
+    let mut yard = CrateYard::from(Into::<Vec<&str>>::into(yard_def));
+
+    move_defs
+        .iter()
+        .for_each(|move_def| yard.apply_instruction_crane9001(CrateInstruction::from(*move_def)));
+
+    Some(yard.top_readout())
 }
 
 fn main() {
@@ -139,12 +165,24 @@ mod tests {
     #[rstest]
     #[case(CrateYard{ crates: HashMap::from([(1, vec!['Z', 'N']), (2, vec!['M', 'C', 'D']), (3, vec!['P'])]) }, CrateInstruction {quantity: 1, from: 2, to: 1},CrateYard{ crates: HashMap::from([(1, vec!['Z', 'N', 'D']), (2, vec!['M', 'C']), (3, vec!['P'])]) } )]
     #[case(CrateYard{ crates: HashMap::from([(1, vec!['Z', 'N', 'D']), (2, vec!['M', 'C']), (3, vec!['P'])]) }, CrateInstruction {quantity: 3, from: 1, to: 3},CrateYard{ crates: HashMap::from([(1, vec![]), (2, vec!['M', 'C']), (3, vec!['P', 'D', 'N', 'Z'])]) } )]
-    fn test_apply_crate_instruction(
+    fn test_apply_crate_instruction_9000(
         #[case] mut state: CrateYard,
         #[case] instruction: CrateInstruction,
         #[case] expected_state: CrateYard,
     ) {
-        state.apply_instruction(instruction);
+        state.apply_instruction_crane9000(instruction);
+        assert_eq!(state, expected_state);
+    }
+
+    #[rstest]
+    #[case(CrateYard{ crates: HashMap::from([(1, vec!['Z', 'N']), (2, vec!['M', 'C', 'D']), (3, vec!['P'])]) }, CrateInstruction {quantity: 1, from: 2, to: 1},CrateYard{ crates: HashMap::from([(1, vec!['Z', 'N', 'D']), (2, vec!['M', 'C']), (3, vec!['P'])]) } )]
+    #[case(CrateYard{ crates: HashMap::from([(1, vec!['Z', 'N', 'D']), (2, vec!['M', 'C']), (3, vec!['P'])]) }, CrateInstruction {quantity: 3, from: 1, to: 3},CrateYard{ crates: HashMap::from([(1, vec![]), (2, vec!['M', 'C']), (3, vec!['P', 'Z', 'N', 'D'])]) } )]
+    fn test_apply_crate_instruction_9001(
+        #[case] mut state: CrateYard,
+        #[case] instruction: CrateInstruction,
+        #[case] expected_state: CrateYard,
+    ) {
+        state.apply_instruction_crane9001(instruction);
         assert_eq!(state, expected_state);
     }
 
@@ -194,6 +232,6 @@ mod tests {
     #[test]
     fn test_part_two() {
         let input = advent_of_code::read_file("examples", 5);
-        assert_eq!(part_two(&input), None);
+        assert_eq!(part_two(&input), Some(String::from("MCD")));
     }
 }
