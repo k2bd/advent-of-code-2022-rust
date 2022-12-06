@@ -1,11 +1,9 @@
 use std::collections::HashSet;
-use substring::Substring;
 
 fn find_marker(input: &str, message_size: usize) -> Option<usize> {
     (0..input.len())
         .find(|&index| {
-            input
-                .substring(index, index + message_size)
+            input[index..index + message_size]
                 .chars()
                 .collect::<HashSet<_>>()
                 .len()
