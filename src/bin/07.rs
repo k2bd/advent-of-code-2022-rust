@@ -57,7 +57,7 @@ impl Filesystem {
     }
 
     /// Insert a new entry in a directory
-    fn insert_at(&mut self, loc: &Vec<String>, key: String, value: Filesystem) {
+    fn insert_at(&mut self, loc: &[String], key: String, value: Filesystem) {
         self._get_mut_at(loc)
             .expect("No entry at location")
             .children
