@@ -1,133 +1,105 @@
-use std::mem;
+use std::collections::HashMap;
 
-struct FileInfo {
-    name: String,
+#[derive(PartialEq, Debug)]
+struct Filesystem {
+    /// Size of this element itself, not including any children
     size: u32,
+
+    /// Children of the element, i.e. contents of a directory
+    children: Option<HashMap<String, Filesystem>>,
 }
 
-/// A node in a filesystem
-enum FSNode {
-    /// A file with a filename and size
-    File(FileInfo),
-
-    /// A directory with a filename and some inner contents
-    Directory(String, Vec<FSNode>),
-}
-
-impl FSNode {
-    fn get_child(&self, name: String) -> &mut FSNode {
-        if let FSNode::Directory(_, mut children) = self {
-            &children.iter_mut().find(|child| match child {
-                FSNode::File(info) => info.name == name,
-                FSNode::Directory(dir_name, _) => *dir_name == name,
-            }).unwrap()
-        } else {
-            panic!("TODO")
+impl Filesystem {
+    /// A file
+    fn new_file(size: u32) -> Filesystem {
+        Filesystem {
+            size,
+            children: None,
         }
     }
 
-    /// Iterate over contents recursively
-    fn walk(&self) -> FSIter<'_> {
-        FSIter {
-            children: std::slice::from_ref(self),
-            parent: None,
+    /// A directory
+    fn new_dir(children: HashMap<String, Filesystem>) -> Filesystem {
+        Filesystem {
+            size: 0,
+            children: Some(children),
         }
     }
 
-    /// Get the size of the node; either the size of a single file or the
-    /// size of all contents of a directory
-    fn size(&self) -> u32 {
-        self.walk()
-            .map(|node| match node {
-                FSNode::File(info) => info.size,
-                _ => 0,
-            })
-            .sum()
-    }
-}
+    /// Get a mutable reference to a nested element
+    fn _get_mut_at(&mut self, loc: Vec<String>) -> Option<&mut Filesystem> {
+        let mut current_location = self;
 
-impl From<&str> for FSNode {
-    /// Create a filesystem from the puzzle input
-    fn from(mut input: &str) -> Self {
-        let mut filesystem = FSNode::Directory(String::from('/'), vec![]);
-        let mut current_path: Vec<String> = vec![];
+        let mut loc_internal = loc.clone();
+        loc_internal.reverse();
 
-        input.lines().for_each(|line| {
-            if let Some((_, cmd)) = line.split_once("$ ") {
-                // Some user command
-                if let Some((_, go_to)) = line.split_once("cd ") {
-                    match go_to {
-                        "/" => {
-                            current_path = vec![];
-                        }
-                        ".." => {
-                            current_path.pop();
-                        }
-                        other => {
-                            current_path.push(String::from(other));
-                        }
-                    }
-                }
-            } else {
-                // Some directory info
-                let mut cwd = &mut filesystem;
-                current_path
-                    .iter()
-                    .for_each(|subdir| cwd = cwd.get_child(subdir.to_string()));
-
-                if let FSNode::Directory(_, ref mut children) = *cwd {
-                    if let Some((_, dir_name)) = line.split_once("dir ") {
-                        children.push(FSNode::Directory(String::from(dir_name), vec![]));
+        loop {
+            if let Some(item) = loc_internal.pop() {
+                if let Some(children) = &mut current_location.children {
+                    if let Some(child) = children.get_mut(&item.to_string()) {
+                        current_location = child;
                     } else {
-                        let (size, name) = line.split_once(" ").unwrap();
-                        children.push(FSNode::File(FileInfo {
-                            size: size.parse().unwrap(),
-                            name: name.to_string(),
-                        }))
+                        return None;
                     }
                 } else {
-                    panic!("CWD is a file!")
+                    return None;
                 }
+            } else {
+                return Some(current_location);
             }
-        });
+        }
+    }
 
-        filesystem
+    /// Insert a new entry in a directory
+    fn insert_at(&mut self, loc: Vec<String>, key: String, value: Filesystem) {
+        self._get_mut_at(loc)
+            .expect("No entry at location")
+            .children
+            .as_mut()
+            .expect("Entry is not a directory")
+            .insert(key, value);
+    }
+
+    /// Get an immutable reference to a nested element
+    fn get_at(&self, loc: Vec<String>) -> Option<&Filesystem> {
+        let mut current_location = self;
+
+        let mut loc_internal = loc.clone();
+        loc_internal.reverse();
+
+        loop {
+            if let Some(item) = loc_internal.pop() {
+                if let Some(children) = &current_location.children {
+                    if let Some(child) = children.get(&item.to_string()) {
+                        current_location = child;
+                    } else {
+                        return None;
+                    }
+                } else {
+                    return None;
+                }
+            } else {
+                return Some(current_location);
+            }
+        }
+    }
+
+    // Get total size of an item, counting contents recursively
+    fn total_size(&self) -> u32 {
+        self.size
+            + self
+                .children
+                .as_ref()
+                .unwrap_or(&HashMap::new())
+                .iter()
+                .map(|(_, entry)| entry.total_size())
+                .sum::<u32>()
     }
 }
 
-/// An iterator over the contents of a filesystem
-#[derive(Default)]
-struct FSIter<'a> {
-    children: &'a [FSNode],
-    parent: Option<Box<FSIter<'a>>>,
-}
-
-// See https://aloso.github.io/2021/03/09/creating-an-iterator#the-collection-type
-/// Iterate over contents of a filesystem
-impl<'a> Iterator for FSIter<'a> {
-    type Item = &'a FSNode;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(node) = self.children.get(0) {
-            self.children = &self.children[1..];
-            match node {
-                FSNode::File(_) => Some(node),
-                FSNode::Directory(_, children) => {
-                    *self = FSIter {
-                        children: children.as_slice(),
-                        parent: Some(Box::new(mem::take(self))),
-                    };
-                    Some(node)
-                }
-            }
-        } else {
-            if let Some(parent) = self.parent.take() {
-                *self = *parent;
-                self.next()
-            } else {
-                None
-            }
-        }
+impl From<&str> for Filesystem {
+    fn from(_: &str) -> Self {
+        todo!()
     }
 }
 
@@ -148,72 +120,91 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
-    fn example_filesystem() -> FSNode {
-        FSNode::Directory(
-            String::from('/'),
-            vec![
-                FSNode::Directory(
-                    String::from('a'),
-                    vec![
-                        FSNode::Directory(
-                            String::from('e'),
-                            vec![FSNode::File(FileInfo {
-                                name: String::from('i'),
-                                size: 584,
-                            })],
-                        ),
-                        FSNode::File(FileInfo {
-                            name: String::from('f'),
-                            size: 29116,
-                        }),
-                        FSNode::File(FileInfo {
-                            name: String::from('g'),
-                            size: 2557,
-                        }),
-                        FSNode::File(FileInfo {
-                            name: String::from("h.lst"),
-                            size: 62596,
-                        }),
-                    ],
-                ),
-                FSNode::File(FileInfo {
-                    name: String::from("b.txt"),
-                    size: 14848514,
-                }),
-                FSNode::File(FileInfo {
-                    name: String::from("c.dat"),
-                    size: 8504156,
-                }),
-                FSNode::Directory(
-                    String::from('d'),
-                    vec![
-                        FSNode::File(FileInfo {
-                            name: String::from('j'),
-                            size: 4060174,
-                        }),
-                        FSNode::File(FileInfo {
-                            name: String::from("d.log"),
-                            size: 8033020,
-                        }),
-                        FSNode::File(FileInfo {
-                            name: String::from("d.ext"),
-                            size: 5626152,
-                        }),
-                        FSNode::File(FileInfo {
-                            name: String::from('k'),
-                            size: 7214296,
-                        }),
-                    ],
-                ),
-            ],
-        )
+    fn example_filesystem() -> Filesystem {
+        Filesystem::new_dir(HashMap::from([
+            (
+                "a".to_string(),
+                Filesystem::new_dir(HashMap::from([
+                    (
+                        "e".to_string(),
+                        Filesystem::new_dir(HashMap::from([(
+                            "i".to_string(),
+                            Filesystem::new_file(584),
+                        )])),
+                    ),
+                    ("f".to_string(), Filesystem::new_file(29116)),
+                    ("g".to_string(), Filesystem::new_file(2557)),
+                    ("h.lst".to_string(), Filesystem::new_file(62596)),
+                ])),
+            ),
+            ("b.txt".to_string(), Filesystem::new_file(14848514)),
+            ("c.dat".to_string(), Filesystem::new_file(8504156)),
+            (
+                "d".to_string(),
+                Filesystem::new_dir(HashMap::from([
+                    ("j".to_string(), Filesystem::new_file(4060174)),
+                    ("d.log".to_string(), Filesystem::new_file(8033020)),
+                    ("d.ext".to_string(), Filesystem::new_file(5626152)),
+                    ("k".to_string(), Filesystem::new_file(7214296)),
+                ])),
+            ),
+        ]))
     }
 
     #[test]
-    fn test_fs_size_root() {
-        let fs = example_filesystem();
-        assert_eq!(fs.size(), 48381165);
+    fn test_insert_at() {
+        let mut fs = example_filesystem();
+        fs.insert_at(
+            vec!["a".to_string(), "e".to_string()],
+            "kevin.txt".to_string(),
+            Filesystem::new_file(1234),
+        );
+
+        assert_eq!(
+            fs,
+            Filesystem::new_dir(HashMap::from([
+                (
+                    "a".to_string(),
+                    Filesystem::new_dir(HashMap::from([
+                        (
+                            "e".to_string(),
+                            Filesystem::new_dir(HashMap::from([
+                                ("i".to_string(), Filesystem::new_file(584),),
+                                ("kevin.txt".to_string(), Filesystem::new_file(1234),),
+                            ])),
+                        ),
+                        ("f".to_string(), Filesystem::new_file(29116)),
+                        ("g".to_string(), Filesystem::new_file(2557)),
+                        ("h.lst".to_string(), Filesystem::new_file(62596)),
+                    ])),
+                ),
+                ("b.txt".to_string(), Filesystem::new_file(14848514)),
+                ("c.dat".to_string(), Filesystem::new_file(8504156)),
+                (
+                    "d".to_string(),
+                    Filesystem::new_dir(HashMap::from([
+                        ("j".to_string(), Filesystem::new_file(4060174)),
+                        ("d.log".to_string(), Filesystem::new_file(8033020)),
+                        ("d.ext".to_string(), Filesystem::new_file(5626152)),
+                        ("k".to_string(), Filesystem::new_file(7214296)),
+                    ])),
+                ),
+            ]))
+        )
+    }
+
+    #[rstest]
+    #[case(vec!["a".to_string(), "e".to_string()], 584)]
+    #[case(vec!["a".to_string()], 94853)]
+    #[case(vec!["d".to_string()], 24933642)]
+    #[case(vec![], 48381165)]
+    fn test_total_size(#[case] loc: Vec<String>, #[case] expected_size: u32) {
+        assert_eq!(
+            example_filesystem().get_at(loc).unwrap().total_size(),
+            expected_size
+        )
     }
 
     #[test]
