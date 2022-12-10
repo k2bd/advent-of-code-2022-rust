@@ -69,29 +69,44 @@ impl Step {
 
 struct Rope {
     head: Position,
-    tail: Position,
+    tail: Option<Box<Rope>>,
 }
 
 impl Rope {
-    fn new() -> Rope {
+    fn new(len: u32) -> Rope {
         Rope {
             head: Position(0, 0),
-            tail: Position(0, 0),
+            tail: if len > 0 {
+                Some(Box::new(Rope::new(len - 1)))
+            } else {
+                None
+            },
         }
     }
 
-    fn move_head(&mut self, dir: Step) {
+    fn move_head(&mut self, dir: Position) {
         let new_head_pos = self.head + dir;
-        let new_tail_pos: Position = if self.tail.move_dist(new_head_pos) > 1 {
-            let diff = new_head_pos - self.tail;
-            let tail_move = Position(diff.0.signum(), diff.1.signum());
-            self.tail + tail_move
-        } else {
-            self.tail
-        };
-
         self.head = new_head_pos;
-        self.tail = new_tail_pos;
+
+        if let Some(tail) = &mut self.tail {
+            let tail_move = if tail.head.move_dist(new_head_pos) > 1 {
+                let diff = new_head_pos - tail.head;
+                Position(diff.0.signum(), diff.1.signum())
+            } else {
+                Position(0, 0)
+            };
+
+            tail.move_head(tail_move);
+        }
+    }
+
+    /// Get the ultimate tail position of the rope
+    fn tail_pos(&self) -> Position {
+        if let Some(tail) = &self.tail {
+            tail.tail_pos()
+        } else {
+            self.head
+        }
     }
 }
 
@@ -115,19 +130,27 @@ fn get_steps(input: &str) -> Vec<Step> {
 }
 
 pub fn part_one(input: &str) -> Option<u32> {
-    let mut rope = Rope::new();
+    let mut rope = Rope::new(1);
     let mut visited: HashSet<Position> = HashSet::from([Position(0, 0)]);
 
     get_steps(input).iter().for_each(|step| {
-        rope.move_head(*step);
-        visited.insert(rope.tail);
+        rope.move_head(step.rel_position());
+        visited.insert(rope.tail_pos());
     });
 
     Some(visited.len() as u32)
 }
 
 pub fn part_two(input: &str) -> Option<u32> {
-    None
+    let mut rope = Rope::new(9);
+    let mut visited: HashSet<Position> = HashSet::from([Position(0, 0)]);
+
+    get_steps(input).iter().for_each(|step| {
+        rope.move_head(step.rel_position());
+        visited.insert(rope.tail_pos());
+    });
+
+    Some(visited.len() as u32)
 }
 
 fn main() {
@@ -149,6 +172,12 @@ mod tests {
     #[test]
     fn test_part_two() {
         let input = advent_of_code::read_file("examples", 9);
-        assert_eq!(part_two(&input), None);
+        assert_eq!(part_two(&input), Some(1));
+    }
+
+    #[test]
+    fn test_part_two_extra() {
+        let input = advent_of_code::read_file("examples_extra", 9);
+        assert_eq!(part_two(&input), Some(36));
     }
 }
